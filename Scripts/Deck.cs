@@ -1,0 +1,145 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Deck{
+
+	/// <summary>
+	/// The position the deck is considered to be for animation purposes.
+	/// </summary>
+	public Vector3 basePosition = Vector3.zero;
+
+	/// <summary>
+	/// Card-sprites within the deck will max out at this ordering depth
+	/// </summary>
+	public int orderingBase = 0;
+
+	[SerializeField]
+	private List<Card> cards = new List<Card>();
+
+	public int Count => cards.Count;
+
+
+	public bool Contains(Card c) {
+		return cards.Contains(c);
+	}
+
+
+	/// <summary>
+	/// Shuffles the decks with the Fisher-Yates shuffle
+	/// </summary>
+	public void Shuffle() {
+		int n = cards.Count;
+		while (n > 1) {
+			n--;
+			int k = Random.Range(0, n+1);
+			Card value = cards[k];
+			cards[k] = cards[n];
+			cards[n] = value;
+		}
+	}
+
+	/// <summary>
+	/// Turns all of the cards in the deck towards the specific location and returns cards to the base position
+	/// </summary>
+	/// <param name="playerNameOrNull"></param>
+	/// <returns></returns>
+	public IEnumerator Orient(string playerNameOrNull, StateMachineSystem.StateMachine targetMachine) {
+		foreach (Card card in cards) {
+
+            float orientation = targetMachine.Memory.GetData<Player>(playerNameOrNull).gameObject.transform.eulerAngles.z + 90.0f;
+            card.gameObject.transform.rotation = Quaternion.Euler(0.0f, card.transform.eulerAngles.y, orientation);
+
+            //card.StartCoroutine(GameManager.cardAnimator.Orient(card, playerNameOrNull, targetMachine));
+			card.StartCoroutine(GameManager.cardAnimator.FlyTo(basePosition, card));
+		}
+		//Wait for all the cards to finish animating
+		foreach (Card card in cards) {
+			while (card.animating)
+				yield return null;
+		}
+	}
+
+	/// <summary>
+	/// Takes amt cards from the top of the deck and returns them as an array
+	/// </summary>
+	/// <param name="amt"></param>
+	/// <returns></returns>
+	public Card[] Draw(int amt) {
+		Card[] t = new Card[amt];
+		for (int i = 0; i < amt; i++) {
+			//Pop off the 0th position every time.
+			t[i] = cards[0];
+			cards.RemoveAt(0);
+			t[i].SetOrdering(orderingBase+1);
+		}
+		return t;
+	}
+
+	/// <summary>
+	/// Places an array of cards in the deck
+	/// </summary>
+	/// <param name="cards"></param>
+	/// <param name="index"></param>
+	public void Place(Card[] cards, int index = 0) {
+		this.cards.InsertRange(index, cards);
+		AssertOrdering();
+	}
+
+	/// <summary>
+	/// More aggressive form of orientation, this is effectively a full reset on cards within the deck.
+	/// </summary>
+	/// <param name="animated"></param>
+	public void EnforceCardLocationAndOrientation(bool animated, StateMachineSystem.StateMachine targetMachine) {
+		basePosition.z = 0;
+		AssertOrdering();
+
+		for (int i = 0; i < cards.Count; i++)
+		{
+			if (animated)
+			{
+				cards[i].StartCoroutine(GameManager.cardAnimator.FlyTo(basePosition, cards[i]));
+				//if (cards[i].faceDown == false)
+					//cards[i].StartCoroutine(GameManager.cardAnimator.Flip(cards[i]));
+
+				//float orientation = 0(string.IsNullOrEmpty(playerNameOrNull)) ? 0.0f : targetMachine.Memory.GetData<Player>(playerNameOrNull).gameObject.transform.eulerAngles.z + 90.0f;
+				//cards[i].gameObject.transform.rotation = Quaternion.Euler(0.0f, cards[i].transform.eulerAngles.y, 0);
+				//cards[i].StartCoroutine(GameManager.cardAnimator.Orient(cards[i], null, targetMachine));}
+
+			}
+			else
+			{
+				cards[i].transform.position = basePosition;
+			}
+            if (cards[i].faceDown == false)
+				GameManager.cardAnimator.Flip(cards[i]);
+			cards[i].transform.localScale = Vector3.one;
+            cards[i].transform.rotation = Quaternion.Euler(0.0f, cards[i].transform.rotation.eulerAngles.y, 0.0f);
+
+        }
+    }
+	
+	/// <summary>
+	/// Destorys all cards in the deck and deletes any internal data
+	/// </summary>
+	public void Destroy() {
+		while (cards.Count > 0) {
+			Card t = cards[0];
+			cards.RemoveAt(0);
+			GameObject.Destroy(t.gameObject);
+		}
+	}
+
+	/// <summary>
+	/// Assigns a sprite ordering on cards based on their position in the deck
+	/// </summary>
+	public void AssertOrdering() {
+		for (int i = 0; i < cards.Count; i++) {
+			cards[i].SetOrdering(orderingBase - i);
+		}
+	}
+
+	public IEnumerator GetEnumerator() {
+		return ((IEnumerable)this.cards).GetEnumerator();
+	}
+}
